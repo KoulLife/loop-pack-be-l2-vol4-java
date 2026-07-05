@@ -1,0 +1,27 @@
+### Round 7 - 선착순 쿠폰 발급 API (commerce-api)
+### 사전: docker infra(MySQL/Kafka) 기동 + commerce-api(8080) + commerce-streamer 실행
+### 흐름: (1) 비동기 발급 요청 → requestId 수령(PENDING) → (2) Consumer 가 발급 처리 → (3) requestId 로 결과 폴링
+
+### 1) 비동기 발급 요청 - 인증 필요
+### coupon-issue-requests 토픽에 발행하고 즉시 requestId + PENDING 을 반환한다. (실제 발급은 비동기)
+POST {{commerce-api}}/api/v1/coupons/1/issue-requests
+X-Loopers-LoginId: user123
+X-Loopers-LoginPw: Pass1234!
+
+> {%
+    client.global.set("requestId", response.body.data.requestId);
+%}
+
+### 2) 발급 결과 조회 (polling) - 무인증
+### Consumer 처리 후 status 가 ISSUED / SOLD_OUT / DUPLICATED 로 갱신된다.
+GET {{commerce-api}}/api/v1/coupons/issue-requests/{{requestId}}
+
+### 3) 내 쿠폰 목록 조회 - 인증 필요
+GET {{commerce-api}}/api/v1/users/me/coupons
+X-Loopers-LoginId: user123
+X-Loopers-LoginPw: Pass1234!
+
+### (참고) 동기 발급 - 인증 필요
+POST {{commerce-api}}/api/v1/coupons/1/issue
+X-Loopers-LoginId: user123
+X-Loopers-LoginPw: Pass1234!

@@ -26,6 +26,21 @@ public class CouponV1Controller {
         return ApiResponse.success(CouponV1Dto.IssueResponse.from(couponApplicationService.issueCoupon(user.getId(), couponId)));
     }
 
+    @PostMapping("/api/v1/coupons/{couponId}/issue-requests")
+    public ApiResponse<CouponV1Dto.IssueRequestResponse> requestIssue(
+        @PathVariable Long couponId,
+        HttpServletRequest request
+    ) {
+        UserModel user = (UserModel) request.getAttribute(AuthInterceptor.AUTHENTICATED_USER);
+        String requestId = couponApplicationService.requestIssue(user.getId(), couponId);
+        return ApiResponse.success(CouponV1Dto.IssueRequestResponse.accepted(requestId, couponId));
+    }
+
+    @GetMapping("/api/v1/coupons/issue-requests/{requestId}")
+    public ApiResponse<CouponV1Dto.IssueRequestStatusResponse> getIssueRequestStatus(@PathVariable String requestId) {
+        return ApiResponse.success(CouponV1Dto.IssueRequestStatusResponse.from(couponApplicationService.getIssueRequestStatus(requestId)));
+    }
+
     @GetMapping("/api/v1/users/me/coupons")
     public ApiResponse<CouponV1Dto.CouponListResponse> getUserCoupons(HttpServletRequest request) {
         UserModel user = (UserModel) request.getAttribute(AuthInterceptor.AUTHENTICATED_USER);
