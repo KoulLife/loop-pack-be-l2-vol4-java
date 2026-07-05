@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
@@ -35,8 +36,9 @@ class ProductApplicationServiceTest {
     private final LikeRepository likeRepository = mock(LikeRepository.class);
     private final ProductDomainService productDomainService = new ProductDomainService();
     private final ProductCacheService productCacheService = mock(ProductCacheService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final ProductApplicationService productApplicationService =
-        new ProductApplicationService(productRepository, brandRepository, likeRepository, productDomainService, productCacheService);
+        new ProductApplicationService(productRepository, brandRepository, likeRepository, productDomainService, productCacheService, eventPublisher);
 
     @BeforeEach
     void setUp() {

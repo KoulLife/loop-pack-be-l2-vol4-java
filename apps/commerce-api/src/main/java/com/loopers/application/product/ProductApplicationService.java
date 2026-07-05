@@ -6,10 +6,12 @@ import com.loopers.domain.like.LikeRepository;
 import com.loopers.domain.product.ProductDomainService;
 import com.loopers.domain.product.ProductModel;
 import com.loopers.domain.product.ProductRepository;
+import com.loopers.domain.product.ProductViewedEvent;
 import com.loopers.infrastructure.cache.ProductCacheService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -28,6 +30,7 @@ public class ProductApplicationService {
     private final LikeRepository likeRepository;
     private final ProductDomainService productDomainService;
     private final ProductCacheService productCacheService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public List<ProductInfo> getProducts(Long brandId, int page, int size, String sort) {
@@ -91,7 +94,9 @@ public class ProductApplicationService {
                 productCacheService.putProductLikeCount(id, count);
                 return count;
             });
-        return ProductInfo.from(productDomainService.compose(product, brand, likeCount));
+        ProductInfo result = ProductInfo.from(productDomainService.compose(product, brand, likeCount));
+        eventPublisher.publishEvent(new ProductViewedEvent(id));
+        return result;
     }
 
     @Transactional(readOnly = true)
