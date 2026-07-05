@@ -4,15 +4,19 @@ import com.loopers.domain.coupon.CouponModel;
 import com.loopers.domain.coupon.CouponRepository;
 import com.loopers.domain.coupon.UserCouponModel;
 import com.loopers.domain.coupon.UserCouponRepository;
+import com.loopers.domain.order.OrderCreatedEvent;
 import com.loopers.domain.order.OrderDomainService;
 import com.loopers.domain.order.OrderModel;
 import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.product.ProductModel;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.infrastructure.cache.ProductCacheService;
+import com.loopers.infrastructure.outbox.OutboxService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -32,12 +36,14 @@ public class OrderApplicationService {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Seoul");
 
-    private final OrderRepository orderRepository;
+	private final ApplicationEventPublisher eventPublisher;
+	private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final OrderDomainService orderDomainService;
     private final CouponRepository couponRepository;
     private final UserCouponRepository userCouponRepository;
     private final ProductCacheService productCacheService;
+    private final OutboxService outboxService;
 
     @Transactional
     public OrderInfo createOrder(Long userId, OrderCommand command) {
@@ -48,7 +54,11 @@ public class OrderApplicationService {
         OrderModel order = orderDomainService.place(userId, quantities, products, discountPrice);
         products.values().forEach(productRepository::save);
         products.keySet().forEach(productCacheService::evictProductStock);
-        return OrderInfo.from(orderRepository.save(order));
+		OrderModel savedOrder = orderRepository.save(order);
+		outboxService.saveOrderCreated(savedOrder, quantities);
+		eventPublisher.publishEvent(new OrderCreatedEvent(savedOrder.getId(), userId));
+
+		return OrderInfo.from(savedOrder);
     }
 
     private Map<Long, Integer> buildQuantities(List<OrderCommand.Item> items) {

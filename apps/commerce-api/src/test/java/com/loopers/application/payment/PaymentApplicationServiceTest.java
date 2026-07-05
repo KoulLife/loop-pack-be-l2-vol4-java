@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
 import java.util.Optional;
@@ -32,10 +33,11 @@ import static org.mockito.Mockito.when;
 @Tag("domain")
 class PaymentApplicationServiceTest {
 
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final PaymentRepository paymentRepository = mock(PaymentRepository.class);
     private final OrderRepository orderRepository = mock(OrderRepository.class);
     private final ProductRepository productRepository = mock(ProductRepository.class);
-    private final PaymentApplicationService service = new PaymentApplicationService(paymentRepository, orderRepository, productRepository);
+    private final PaymentApplicationService service = new PaymentApplicationService(eventPublisher, paymentRepository, orderRepository, productRepository);
 
     private static final Long USER_ID = 1L;
     private static final Long ORDER_ID = 100L;

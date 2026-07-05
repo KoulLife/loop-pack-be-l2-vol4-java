@@ -13,12 +13,14 @@ import com.loopers.domain.order.OrderStatus;
 import com.loopers.domain.product.ProductModel;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.infrastructure.cache.ProductCacheService;
+import com.loopers.infrastructure.outbox.OutboxService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -33,14 +35,16 @@ import static org.mockito.Mockito.*;
 @Tag("domain")
 class OrderApplicationServiceTest {
 
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final OrderRepository orderRepository = mock(OrderRepository.class);
     private final ProductRepository productRepository = mock(ProductRepository.class);
     private final OrderDomainService orderDomainService = new OrderDomainService();
     private final CouponRepository couponRepository = mock(CouponRepository.class);
     private final UserCouponRepository userCouponRepository = mock(UserCouponRepository.class);
     private final ProductCacheService productCacheService = mock(ProductCacheService.class);
+    private final OutboxService outboxService = mock(OutboxService.class);
     private final OrderApplicationService orderApplicationService =
-        new OrderApplicationService(orderRepository, productRepository, orderDomainService, couponRepository, userCouponRepository, productCacheService);
+        new OrderApplicationService(eventPublisher, orderRepository, productRepository, orderDomainService, couponRepository, userCouponRepository, productCacheService, outboxService);
 
     private static final Long USER_ID = 100L;
     private static final Long OTHER_USER_ID = 999L;

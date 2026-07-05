@@ -6,13 +6,15 @@ import com.loopers.domain.coupon.CouponStatus;
 import com.loopers.domain.coupon.CouponType;
 import com.loopers.domain.coupon.UserCouponModel;
 import com.loopers.domain.coupon.UserCouponRepository;
+import com.loopers.infrastructure.coupon.CouponIssueRequestJpaRepository;
+import com.loopers.infrastructure.outbox.OutboxService;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -35,8 +37,11 @@ class CouponApplicationServiceTest {
 
     private final CouponRepository couponRepository = mock(CouponRepository.class);
     private final UserCouponRepository userCouponRepository = mock(UserCouponRepository.class);
+    private final OutboxService outboxService = mock(OutboxService.class);
+    private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+    private final CouponIssueRequestJpaRepository couponIssueRequestRepository = mock(CouponIssueRequestJpaRepository.class);
     private final CouponApplicationService couponApplicationService =
-        new CouponApplicationService(couponRepository, userCouponRepository);
+        new CouponApplicationService(couponRepository, userCouponRepository, outboxService, eventPublisher, couponIssueRequestRepository);
 
     private static final Long USER_ID = 1L;
     private static final Long COUPON_ID = 10L;
@@ -349,6 +354,71 @@ class CouponApplicationServiceTest {
                 () -> couponApplicationService.issueCoupon(USER_ID, COUPON_ID));
             assertThat(result.getErrorType()).isEqualTo(ErrorType.CONFLICT);
             verify(userCouponRepository, never()).save(any());
+        }
+    }
+
+    @DisplayName("비동기 쿠폰 발급 요청 시, ")
+    @Nested
+    class RequestIssue {
+
+        @DisplayName("정상 요청이면 outbox 저장·PENDING 기록·이벤트 발행 후 requestId를 반환한다.")
+        @Test
+        void savesToOutboxAndPublishesEvent_whenValid() {
+            // arrange
+            when(couponRepository.findById(COUPON_ID)).thenReturn(Optional.of(stubCoupon()));
+            when(userCouponRepository.existsByUserIdAndCouponId(USER_ID, COUPON_ID)).thenReturn(false);
+            when(outboxService.saveCouponIssueRequested(COUPON_ID, USER_ID)).thenReturn("req-123");
+
+            // act
+            String requestId = couponApplicationService.requestIssue(USER_ID, COUPON_ID);
+
+            // assert
+            assertThat(requestId).isEqualTo("req-123");
+            verify(outboxService).saveCouponIssueRequested(COUPON_ID, USER_ID);
+            verify(couponIssueRequestRepository).save(any());
+            verify(eventPublisher).publishEvent(any());
+        }
+
+        @DisplayName("존재하지 않는 쿠폰이면 NOT_FOUND 예외가 발생하고 outbox 저장이 호출되지 않는다.")
+        @Test
+        void throwsNotFound_whenCouponDoesNotExist() {
+            // arrange
+            when(couponRepository.findById(COUPON_ID)).thenReturn(Optional.empty());
+
+            // act & assert
+            CoreException result = assertThrows(CoreException.class,
+                () -> couponApplicationService.requestIssue(USER_ID, COUPON_ID));
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.NOT_FOUND);
+            verify(outboxService, never()).saveCouponIssueRequested(any(), any());
+        }
+
+        @DisplayName("만료된 쿠폰이면 BAD_REQUEST 예외가 발생하고 outbox 저장이 호출되지 않는다.")
+        @Test
+        void throwsBadRequest_whenCouponExpired() {
+            // arrange
+            CouponModel expiredCoupon = new CouponModel(COUPON_ID, "만료쿠폰", CouponType.FIXED, 1000, 0,
+                ZonedDateTime.now().minusDays(1), null, null);
+            when(couponRepository.findById(COUPON_ID)).thenReturn(Optional.of(expiredCoupon));
+
+            // act & assert
+            CoreException result = assertThrows(CoreException.class,
+                () -> couponApplicationService.requestIssue(USER_ID, COUPON_ID));
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.BAD_REQUEST);
+            verify(outboxService, never()).saveCouponIssueRequested(any(), any());
+        }
+
+        @DisplayName("이미 발급된 쿠폰이면 CONFLICT 예외가 발생하고 outbox 저장이 호출되지 않는다.")
+        @Test
+        void throwsConflict_whenAlreadyIssued() {
+            // arrange
+            when(couponRepository.findById(COUPON_ID)).thenReturn(Optional.of(stubCoupon()));
+            when(userCouponRepository.existsByUserIdAndCouponId(USER_ID, COUPON_ID)).thenReturn(true);
+
+            // act & assert
+            CoreException result = assertThrows(CoreException.class,
+                () -> couponApplicationService.requestIssue(USER_ID, COUPON_ID));
+            assertThat(result.getErrorType()).isEqualTo(ErrorType.CONFLICT);
+            verify(outboxService, never()).saveCouponIssueRequested(any(), any());
         }
     }
 }
