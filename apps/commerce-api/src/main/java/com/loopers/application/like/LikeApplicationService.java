@@ -1,5 +1,6 @@
 package com.loopers.application.like;
 
+import com.loopers.domain.like.LikeChangedEvent;
 import com.loopers.domain.like.LikeModel;
 import com.loopers.domain.like.LikeRepository;
 import com.loopers.domain.product.ProductModel;
@@ -7,6 +8,8 @@ import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +23,7 @@ public class LikeApplicationService {
 
     private final LikeRepository likeRepository;
     private final ProductRepository productRepository;
+	private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void like(Long userId, Long productId) {
@@ -29,7 +33,9 @@ public class LikeApplicationService {
             throw new CoreException(ErrorType.CONFLICT, "이미 좋아요한 상품입니다.");
         }
         likeRepository.save(new LikeModel(userId, productId));
-        productRepository.incrementLikeCount(productId);
+		eventPublisher.publishEvent(
+			new LikeChangedEvent(userId, productId, LikeChangedEvent.Type.LIKED)
+		);
     }
 
     @Transactional
@@ -37,7 +43,9 @@ public class LikeApplicationService {
         LikeModel like = likeRepository.findByUserIdAndProductId(userId, productId)
             .orElseThrow(() -> new CoreException(ErrorType.NOT_FOUND, "좋아요 내역이 없습니다."));
         likeRepository.delete(like.getId());
-        productRepository.decrementLikeCount(productId);
+		eventPublisher.publishEvent(
+			new LikeChangedEvent(userId, productId, LikeChangedEvent.Type.UNLIKED)
+		);
     }
 
     @Transactional(readOnly = true)

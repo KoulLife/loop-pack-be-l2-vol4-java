@@ -4,14 +4,18 @@ import com.loopers.domain.order.OrderLine;
 import com.loopers.domain.order.OrderModel;
 import com.loopers.domain.order.OrderRepository;
 import com.loopers.domain.order.OrderStatus;
+import com.loopers.domain.payment.PaymentFailedEvent;
 import com.loopers.domain.payment.PaymentModel;
 import com.loopers.domain.payment.PaymentRepository;
+import com.loopers.domain.payment.PaymentSucceededEvent;
 import com.loopers.domain.payment.PgTransactionStatus;
 import com.loopers.domain.product.ProductModel;
 import com.loopers.domain.product.ProductRepository;
 import com.loopers.support.error.CoreException;
 import com.loopers.support.error.ErrorType;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class PaymentApplicationService {
 
+	private final ApplicationEventPublisher eventPublisher;
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
@@ -78,10 +83,16 @@ public class PaymentApplicationService {
             case SUCCESS -> {
                 payment.markSuccess();
                 applyOrderPaid(payment.getOrderId());
+				eventPublisher.publishEvent(
+					new PaymentSucceededEvent(payment.getOrderId(), payment.getUserId(), payment.getAmount())
+				);
             }
             case FAILED -> {
                 payment.markFailed(reason);
                 applyOrderCancelledWithStockRestore(payment.getOrderId());
+				eventPublisher.publishEvent(
+					new PaymentFailedEvent(payment.getOrderId(), payment.getUserId(), reason)
+				);
             }
             case PENDING -> {
                 return payment; // 아직 미확정
