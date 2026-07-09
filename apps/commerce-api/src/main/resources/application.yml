@@ -21,6 +21,7 @@ spring:
     import:
       - jpa.yml
       - redis.yml
+      - kafka.yml
       - logging.yml
       - monitoring.yml
   cloud:
@@ -39,6 +40,13 @@ springdoc:
 pg:
   base-url: http://localhost:8082
   callback-url: http://localhost:8080/api/v1/payments/callback  # PG 가 결제 결과를 통보할 콜백 (Phase 5에서 수신 엔드포인트 구현)
+
+queue:
+  admission:
+    batch-size: 100      # 1회 입장 인원 (산정 근거: docs/round8-queue.md)
+    interval-ms: 1000    # 스케줄러 실행 주기 (ms)
+  token:
+    ttl-seconds: 300     # 입장 토큰 TTL (5분)
 
 resilience4j:
   circuitbreaker:
