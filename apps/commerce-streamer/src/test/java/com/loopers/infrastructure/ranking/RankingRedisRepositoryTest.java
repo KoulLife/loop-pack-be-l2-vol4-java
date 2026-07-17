@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisTemplate;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -94,5 +95,44 @@ class RankingRedisRepositoryTest {
         Long likedRank = redisTemplate.opsForZSet().reverseRank(key, String.valueOf(likedProduct));
 
         assertThat(orderedRank).isLessThan(likedRank);
+    }
+
+    @DisplayName("이월 시, 원본 랭킹의 상위 N개만 감쇠된 점수로 대상 날짜에 반영된다.")
+    @Test
+    void carryOverTopScores_appliesDecayedScoreToTopNOnly() {
+        // arrange
+        LocalDate today = LocalDate.now(ZONE);
+        LocalDate tomorrow = today.plusDays(1);
+        Long topProduct = 1L;
+        Long secondProduct = 2L;
+        Long excludedProduct = 3L;
+
+        rankingRedisRepository.addScore(topProduct, 1000.0, ZonedDateTime.now(ZONE));
+        rankingRedisRepository.addScore(secondProduct, 500.0, ZonedDateTime.now(ZONE));
+        rankingRedisRepository.addScore(excludedProduct, 100.0, ZonedDateTime.now(ZONE));
+
+        // act: 상위 2개만, 10%로 감쇠하여 이월
+        rankingRedisRepository.carryOverTopScores(today, tomorrow, 2, 0.1);
+
+        // assert
+        String tomorrowKey = "ranking:all:" + tomorrow.format(KEY_DATE_FORMAT);
+        assertThat(redisTemplate.opsForZSet().score(tomorrowKey, String.valueOf(topProduct))).isEqualTo(100.0);
+        assertThat(redisTemplate.opsForZSet().score(tomorrowKey, String.valueOf(secondProduct))).isEqualTo(50.0);
+        assertThat(redisTemplate.opsForZSet().score(tomorrowKey, String.valueOf(excludedProduct))).isNull();
+    }
+
+    @DisplayName("이월 대상 날짜에 원본 랭킹이 없으면, 아무 것도 반영되지 않는다.")
+    @Test
+    void carryOverTopScores_doesNothing_whenSourceRankingIsEmpty() {
+        // arrange
+        LocalDate today = LocalDate.now(ZONE);
+        LocalDate tomorrow = today.plusDays(1);
+
+        // act
+        rankingRedisRepository.carryOverTopScores(today, tomorrow, 100, 0.1);
+
+        // assert
+        String tomorrowKey = "ranking:all:" + tomorrow.format(KEY_DATE_FORMAT);
+        assertThat(redisTemplate.hasKey(tomorrowKey)).isFalse();
     }
 }
