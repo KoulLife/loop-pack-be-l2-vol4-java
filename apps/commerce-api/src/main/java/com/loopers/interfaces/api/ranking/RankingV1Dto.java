@@ -10,7 +10,8 @@ public class RankingV1Dto {
         String productName,
         String brandName,
         Long price,
-        double score
+        double score,
+        boolean fallback
     ) {
         public static RankingResponse from(RankingInfo info) {
             return new RankingResponse(
@@ -19,7 +20,8 @@ public class RankingV1Dto {
                 info.productName(),
                 info.brandName(),
                 info.price(),
-                info.score()
+                info.score(),
+                info.fallback()
             );
         }
     }

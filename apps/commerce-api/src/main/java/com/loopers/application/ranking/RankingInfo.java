@@ -6,5 +6,6 @@ public record RankingInfo(
     String productName,
     String brandName,
     Long price,
-    double score
+    double score,
+    boolean fallback
 ) {}

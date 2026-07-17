@@ -1,6 +1,7 @@
 package com.loopers.interfaces.api;
 
 import com.loopers.application.brand.BrandApplicationService;
+import com.loopers.application.like.LikeApplicationService;
 import com.loopers.application.product.ProductAdminInfo;
 import com.loopers.application.product.ProductApplicationService;
 import com.loopers.interfaces.api.ranking.RankingV1Dto;
@@ -46,6 +47,9 @@ class RankingV1ApiE2ETest {
 
     @Autowired
     private ProductApplicationService productApplicationService;
+
+    @Autowired
+    private LikeApplicationService likeApplicationService;
 
     @Autowired
     @Qualifier("masterRedisTemplate")
@@ -108,6 +112,7 @@ class RankingV1ApiE2ETest {
                 () -> assertThat(rankings.get(0).productId()).isEqualTo(highScoreProduct),
                 () -> assertThat(rankings.get(0).productName()).isEqualTo("하이스코어"),
                 () -> assertThat(rankings.get(0).brandName()).isEqualTo("나이키"),
+                () -> assertThat(rankings.get(0).fallback()).isFalse(),
                 () -> assertThat(rankings.get(1).rank()).isEqualTo(2L),
                 () -> assertThat(rankings.get(1).productId()).isEqualTo(lowScoreProduct)
             );
@@ -134,9 +139,9 @@ class RankingV1ApiE2ETest {
                 .containsExactly(todayProduct);
         }
 
-        @DisplayName("해당 날짜에 랭킹 데이터가 없으면, 빈 목록을 반환한다.")
+        @DisplayName("랭킹 데이터도 없고 상품도 없으면, 빈 목록을 반환한다.")
         @Test
-        void returnsEmptyList_whenNoRankingDataForDate() {
+        void returnsEmptyList_whenNoRankingDataAndNoProducts() {
             // act
             ResponseEntity<ApiResponse<List<RankingV1Dto.RankingResponse>>> response = getRankings(LocalDate.now(ZONE));
 
@@ -144,6 +149,32 @@ class RankingV1ApiE2ETest {
             assertAll(
                 () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
                 () -> assertThat(response.getBody().data()).isEmpty()
+            );
+        }
+
+        @DisplayName("랭킹 데이터는 없지만 상품이 있으면, 좋아요순 상품을 fallback=true로 반환한다.")
+        @Test
+        void fallsBackToPopularProducts_whenNoRankingDataButProductsExist() {
+            // arrange: 서비스 오픈 초기처럼 랭킹 집계는 없지만 상품/좋아요는 존재하는 상황
+            Long brandId = brandApplicationService.create("나이키", "스포츠 브랜드").id();
+            Long lessLikedProduct = createProduct(brandId, "적은좋아요");
+            Long moreLikedProduct = createProduct(brandId, "많은좋아요");
+            likeApplicationService.like(1L, moreLikedProduct);
+            likeApplicationService.like(2L, moreLikedProduct);
+            likeApplicationService.like(1L, lessLikedProduct);
+
+            // act
+            ResponseEntity<ApiResponse<List<RankingV1Dto.RankingResponse>>> response = getRankings(LocalDate.now(ZONE));
+
+            // assert
+            List<RankingV1Dto.RankingResponse> rankings = response.getBody().data();
+            assertAll(
+                () -> assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK),
+                () -> assertThat(rankings).hasSize(2),
+                () -> assertThat(rankings).allMatch(RankingV1Dto.RankingResponse::fallback),
+                () -> assertThat(rankings.get(0).productId()).isEqualTo(moreLikedProduct),
+                () -> assertThat(rankings.get(0).rank()).isEqualTo(1L),
+                () -> assertThat(rankings.get(1).productId()).isEqualTo(lessLikedProduct)
             );
         }
     }
